@@ -1,5 +1,4 @@
 use std;
-use crate::Either;
 
 #[derive(Debug, PartialOrd, PartialEq, Eq, Copy, Clone)]
 pub struct Reg(pub u8);
@@ -397,7 +396,7 @@ impl LuaInstruction {
         use LuaInstruction::*;
 
         macro_rules! handle_fold {
-            ($($($pattern:pat)|* => { $($rest:tt)* })*) => {
+            ($($($pattern:pat_param)|* => { $($rest:tt)* })*) => {
                 match *self {
                     $($($pattern)|* => {
                         handle_fold!(inner $($rest)*);

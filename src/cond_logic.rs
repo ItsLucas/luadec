@@ -1,5 +1,7 @@
 use std;
 
+use log::trace;
+
 #[derive(Debug, Copy, Clone)]
 pub struct CondTargetID(pub usize);
 
@@ -289,19 +291,19 @@ impl CondContext {
         };
         match result {
             CondLeftAddResult::Simple { ctft, join } => {
-                let mut target_ref_mut = self.target_of_mut(target);
+                let target_ref_mut = self.target_of_mut(target);
                 target_ref_mut.ctft = Some(ctft);
                 target_ref_mut.join = join;
             },
             CondLeftAddResult::AmbiguousFixup { ctft, join, ambiguous_fixup_ctft, ambiguous_fixup_join } => {
                 {
-                    let mut target_ref_mut = self.target_of_mut(target);
+                    let target_ref_mut = self.target_of_mut(target);
                     target_ref_mut.ctft = Some(ctft);
                     target_ref_mut.join = join;
                 }
 
                 {
-                    let mut group_target_ref_mut = self.target_of_mut(group_as_target);
+                    let group_target_ref_mut = self.target_of_mut(group_as_target);
                     group_target_ref_mut.ctft = Some(ambiguous_fixup_ctft);
                     group_target_ref_mut.join = ambiguous_fixup_join;
                 }

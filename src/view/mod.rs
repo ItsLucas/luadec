@@ -7,8 +7,8 @@ mod view_type;
 use std;
 use std::ops::Range;
 
-use instruction_definitions::{Reg, Kst};
-use dump::{DumpContext, DumpType};
+use crate::dump::{DumpContext, DumpType};
+use crate::instruction_definitions::{Reg, Kst};
 
 pub use self::assignment_info::*;
 pub use self::view_type::*;
@@ -17,7 +17,7 @@ pub use self::newtable::*;
 pub use self::view_data::*;
 
 pub trait ViewData: std::fmt::Debug {
-    fn dump(&self, context: &mut DumpContext, typ: DumpType);
+    fn dump(&self, context: &mut dyn DumpContext, typ: DumpType);
 }
 
 pub type RegRange = Range<Reg>;
@@ -68,7 +68,7 @@ pub enum ViewOrReg {
 }
 
 impl ViewOrReg {
-    pub fn dump(&self, context: &mut DumpContext) {
+    pub fn dump(&self, context: &mut dyn DumpContext) {
         match self {
             &ViewOrReg::View(view) => context.write_view(view, DumpType::Expression),
             &ViewOrReg::Reg(reg) => context.write_reg(reg),
@@ -84,7 +84,7 @@ pub enum ViewOrRegOrKst {
 }
 
 impl ViewOrRegOrKst {
-    pub fn dump(&self, context: &mut DumpContext) {
+    pub fn dump(&self, context: &mut dyn DumpContext) {
         match self {
             &ViewOrRegOrKst::View(view) => context.write_view(view, DumpType::Expression),
             &ViewOrRegOrKst::Reg(reg) => context.write_reg(reg),
@@ -92,7 +92,7 @@ impl ViewOrRegOrKst {
         }
     }
 
-    pub fn dump_index(&self, context: &mut DumpContext) {
+    pub fn dump_index(&self, context: &mut dyn DumpContext) {
         match self {
             &ViewOrRegOrKst::View(view) => {
                 context.write_str("[");
@@ -130,7 +130,7 @@ impl From<ViewOrReg> for ViewOrRegOrKst {
 #[derive(Debug)]
 pub struct View {
     pub index: ViewRef,
-    pub data: Box<ViewData>,
+    pub data: Box<dyn ViewData>,
     pub view_type: ViewType,
     pub instructions: Range<u32>,
     pub dependent_view_count: u32,
@@ -187,11 +187,12 @@ impl PartialEq for ViewKeyRef {
 
 impl Eq for ViewKeyRef {}
 
+#[macro_export]
 macro_rules! make_view_key {
     (name: $name:expr , desc: $description:expr) => {
         {
             mod _view_key {
-                use super::ViewKey;
+                use crate::ViewKey;
                 pub static KEY: ViewKey = ViewKey {
                     line: line!(),
                     name: $name,

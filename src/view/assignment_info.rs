@@ -1,8 +1,8 @@
-use dump::DumpContext;
-use instruction_definitions::{Reg, Kst, RK, Upvalue};
-use view::{ViewOrRegOrKst, ViewOrReg};
+use crate::dump::DumpContext;
+use crate::instruction_definitions::{Reg, Kst, RK, Upvalue};
+use crate::view::{ViewOrRegOrKst, ViewOrReg};
 
-use ::ViewBuilder;
+use crate::ViewBuilder;
 
 #[derive(Debug, Clone)]
 pub struct AssignmentInfo {
@@ -17,7 +17,7 @@ pub struct AssignmentInfo {
 }
 
 impl AssignmentInfo {
-    pub fn dump(&self, context: &mut DumpContext) {
+    pub fn dump(&self, context: &mut dyn DumpContext) {
         match &self.lhs {
             &AssignmentLHS::Partial(ref p) => Self::format_partial_lhs(context, &p),
             &AssignmentLHS::Full(ref f) => Self::format_full_lhs(context, &f),
@@ -33,7 +33,7 @@ impl AssignmentInfo {
         }
     }
 
-    fn format_partial_lhs(context: &mut DumpContext, partial: &Vec<PartialAssignmentLHS>) {
+    fn format_partial_lhs(context: &mut dyn DumpContext, partial: &Vec<PartialAssignmentLHS>) {
         for (i, p) in partial.iter().rev().enumerate() {
             if i != 0 {
                 context.write_str(", ");
@@ -80,7 +80,7 @@ impl AssignmentInfo {
         }
     }
 
-    fn format_full_lhs(context: &mut DumpContext, full: &Vec<FullAssignmentLHS>) {
+    fn format_full_lhs(context: &mut dyn DumpContext, full: &Vec<FullAssignmentLHS>) {
         for (i, f) in full.iter().rev().enumerate() {
             if i != 0 {
                 context.write_str(", ");

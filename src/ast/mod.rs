@@ -3,7 +3,6 @@
 // Design: Each block container and expression container has a list of either statements or expressions, and a list of ids for data that is currently live.
 
 use std;
-use obstack;
 use obstack::{Obstack};
 
 struct ASTContext {
@@ -21,7 +20,7 @@ struct Scope<'parent, 'ctx: 'parent> {
 // BLOCK = [STATEMENT[;]?]* [LAST_STATEMENT[;]?]?
 // CHUNK = BLOCK
 struct Block<'ctx> {
-    statements: Vec<&'ctx StatementContainer<'ctx>>,
+    statements: Vec<&'ctx dyn StatementContainer<'ctx>>,
     // last_statement: &'ctx LastStatement
 }
 
@@ -36,8 +35,8 @@ trait StatementContainer<'ctx> {}
 
 struct StatementNode<'ctx, T: Sized> {
     statement: T,
-    previous: Option<&'ctx StatementContainer<'ctx>>,
-    next: Option<&'ctx StatementContainer<'ctx>>,
+    previous: Option<&'ctx dyn StatementContainer<'ctx>>,
+    next: Option<&'ctx dyn StatementContainer<'ctx>>,
 }
 
 impl<'ctx, T: Sized> StatementContainer<'ctx> for StatementNode<'ctx, T> {

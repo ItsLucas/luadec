@@ -1,4 +1,4 @@
-use instruction_definitions::Reg;
+use crate::instruction_definitions::Reg;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FreeMark(Reg);

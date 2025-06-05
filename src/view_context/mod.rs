@@ -1,11 +1,15 @@
 use std::ops::Range;
 
-use bytecode_reader::*;
-use cond_logic::*;
-use instruction_definitions::*;
-use instruction_decoder::decode_instruction;
-use free_mark::*;
-use view::*;
+use crate::bytecode_reader::*;
+use crate::cond_logic::*;
+use crate::instruction_definitions::*;
+use crate::instruction_decoder::decode_instruction;
+use crate::free_mark::*;
+use crate::view::*;
+use log::{trace,warn};
+
+#[macro_use]
+use crate::make_view_key;
 
 /// Type of instruction for an incoming jump.
 #[derive(Debug)]
@@ -892,7 +896,7 @@ impl<'lb> ViewContext<'lb> {
 
         if has_finalizations {
             let mut last_exit = self.decoded.len() as u32;
-            let mut repeat_until_index = 0;
+            let mut _repeat_until_index = 0;
             let mut bail = None;
             let mut following_base: Option<Reg> = None;
 
@@ -913,7 +917,7 @@ impl<'lb> ViewContext<'lb> {
                         };
                         if last_exit != exit && free_mark_ok {
                             last_exit = exit;
-                            repeat_until_index += 1;
+                            _repeat_until_index += 1;
 
                             // Tag as Tail
                             tags.push((view.index - 1, ViewTag::RepeatUntilTail))
@@ -1028,7 +1032,7 @@ impl<'lb> ViewContext<'lb> {
 
         if !self.instr_ex[pc as usize].jump_sources.is_empty() {
             let view = {
-                let mut builder = self.builder(None);
+                let builder = self.builder(None);
                 builder.build(
                     Box::new(BackwardsJumpBarrierViewData),
                     ViewType::Statement { assignment: None },
@@ -1307,8 +1311,8 @@ impl<'lb> ViewContext<'lb> {
 
                     Some({
                         let mut builder = self.builder(None);
-                        let mut taken_rhs = builder.take_reg_or_kst(if flipped { lhs } else { rhs });
-                        let mut taken_lhs = builder.take_reg_or_kst(if flipped { rhs } else { lhs });
+                        let taken_rhs = builder.take_reg_or_kst(if flipped { lhs } else { rhs });
+                        let taken_lhs = builder.take_reg_or_kst(if flipped { rhs } else { lhs });
                         builder.build(
                             Box::new(BinCondOpViewData { lhs: taken_lhs, op, rhs: taken_rhs, inverted, flipped }),
                             ViewType::PartialConditional(PartialCondInfo::BinCondOp),
@@ -1663,7 +1667,7 @@ impl<'lb> ViewContext<'lb> {
             JumpUsage::None => (),
             JumpUsage::MakeBreak => {
                 let view = {
-                    let mut builder = self.builder(None);
+                    let builder = self.builder(None);
                     builder.build(
                         Box::new(BreakViewData),
                         ViewType::simple_statement(),
@@ -1874,7 +1878,7 @@ impl<'lb> ViewContext<'lb> {
 
                     if let Some(else_pc) = else_end_pc {
                         let view = {
-                            let mut builder = self.builder(None);
+                            let builder = self.builder(None);
                             builder.build(
                                 Box::new(ElseViewData),
                                 ViewType::Else { cond_index: cond_index, end: else_pc },

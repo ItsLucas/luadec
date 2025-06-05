@@ -1,8 +1,8 @@
-use instruction_definitions::{Reg, Count};
+use crate::instruction_definitions::{Reg, Count};
 
-use view::AssignmentInfo;
-use view::TableInfo;
-use view::ViewRef;
+use crate::view::AssignmentInfo;
+use crate::view::TableInfo;
+use crate::view::ViewRef;
 
 #[derive(Debug)]
 pub enum ViewType {

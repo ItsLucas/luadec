@@ -1,16 +1,16 @@
-use cond_logic::{CondContext, CondGroupID, CondTargetID, CondJoin, CondVisitor};
-use instruction_definitions::{Reg, Kst, BinCondOp, UnOp, BinOp, Upvalue, ClosureCapture};
-use dump::{DumpContext, DumpType};
-use view::{CallFunc, ViewData, ViewOrReg, ViewOrRegOrKst, ViewRef};
-use view::assignment_info::AssignmentInfo;
-use view::newtable::TableInfo;
+use crate::cond_logic::{CondContext, CondGroupID, CondTargetID, CondJoin, CondVisitor};
+use crate::instruction_definitions::{Reg, Kst, BinCondOp, UnOp, BinOp, Upvalue, ClosureCapture};
+use crate::dump::{DumpContext, DumpType};
+use crate::view::{CallFunc, ViewData, ViewOrReg, ViewOrRegOrKst, ViewRef};
+use crate::view::assignment_info::AssignmentInfo;
+use crate::view::newtable::TableInfo;
 
 #[derive(Debug)]
 pub struct MoveViewData {
     pub source: Reg
 }
 impl ViewData for MoveViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_reg(self.source);
     }
 }
@@ -18,7 +18,7 @@ impl ViewData for MoveViewData {
 #[derive(Debug)]
 pub struct MoveAssignViewData(pub AssignmentInfo);
 impl ViewData for MoveAssignViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         self.0.dump(context);
     }
 }
@@ -28,7 +28,7 @@ pub struct GetGlobalViewData {
     pub index: Kst,
 }
 impl ViewData for GetGlobalViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_name(self.index);
     }
 }
@@ -36,7 +36,7 @@ impl ViewData for GetGlobalViewData {
 #[derive(Debug)]
 pub struct SetGlobalViewData(pub AssignmentInfo);
 impl ViewData for SetGlobalViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         self.0.dump(context);
     }
 }
@@ -46,7 +46,7 @@ pub struct GetUpvalueViewData {
     pub upvalue: Upvalue,
 }
 impl ViewData for GetUpvalueViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_upvalue(self.upvalue);
     }
 }
@@ -54,7 +54,7 @@ impl ViewData for GetUpvalueViewData {
 #[derive(Debug)]
 pub struct SetUpvalueViewData(pub AssignmentInfo);
 impl ViewData for SetUpvalueViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         self.0.dump(context);
     }
 }
@@ -64,7 +64,7 @@ pub struct LoadKViewData {
     pub kst: Kst
 }
 impl ViewData for LoadKViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_constant(self.kst);
     }
 }
@@ -72,7 +72,7 @@ impl ViewData for LoadKViewData {
 #[derive(Debug)]
 pub struct LoadNilViewData(pub u8);
 impl ViewData for LoadNilViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         let mut n = self.0;
         while n > 0 {
             context.write_str("nil");
@@ -87,7 +87,7 @@ impl ViewData for LoadNilViewData {
 #[derive(Debug)]
 pub struct LoadBoolViewData(pub bool);
 impl ViewData for LoadBoolViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         if self.0 {
             context.write_str("true");
         } else {
@@ -99,7 +99,7 @@ impl ViewData for LoadBoolViewData {
 #[derive(Debug)]
 pub struct SkippingLoadBoolViewData(pub Option<ViewRef>);
 impl ViewData for SkippingLoadBoolViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         if let Some(view) = self.0 {
             context.write_view(view, DumpType::Expression)
         } else {
@@ -114,7 +114,7 @@ pub struct TestViewData {
     pub inverted: bool,
 }
 impl ViewData for TestViewData {
-    fn dump(&self, context: &mut DumpContext, typ: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, typ: DumpType) {
         // TODO: if this is within a conditional expression and this test is acting like a TESTSET, invert self.inverted
 
         let inverted = typ.handle_invert(self.inverted);
@@ -133,7 +133,7 @@ pub struct TestSetViewData {
     pub inverted: bool,
 }
 impl ViewData for TestSetViewData {
-    fn dump(&self, context: &mut DumpContext, typ: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, typ: DumpType) {
         let inverted = typ.handle_invert(!self.inverted);
 
         if !inverted {
@@ -153,7 +153,7 @@ pub struct BinCondOpViewData {
     pub flipped: bool,
 }
 impl ViewData for BinCondOpViewData {
-    fn dump(&self, context: &mut DumpContext, typ: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, typ: DumpType) {
         self.lhs.dump(context);
 
         enum ExpandedCond {
@@ -206,7 +206,7 @@ pub struct ConditionalJumpViewData {
     pub cond: ViewRef,
 }
 impl ViewData for ConditionalJumpViewData {
-    fn dump(&self, context: &mut DumpContext, typ: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, typ: DumpType) {
         context.write_view(self.cond, DumpType::Conditional { inverted: typ.handle_invert(false) });
     }
 }
@@ -218,7 +218,7 @@ pub struct BinOpViewData {
     pub rhs: ViewOrRegOrKst,
 }
 impl ViewData for BinOpViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         self.lhs.dump(context);
 
         match self.op {
@@ -240,7 +240,7 @@ pub struct UnOpViewData {
     pub rhs: ViewOrReg
 }
 impl ViewData for UnOpViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         match self.op {
             UnOp::Len => context.write_str("#"),
             UnOp::Not => context.write_str("not "),
@@ -257,7 +257,7 @@ pub struct GetTableViewData {
     pub index: ViewOrRegOrKst
 }
 impl ViewData for GetTableViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         self.table.dump(context);
         self.index.dump_index(context);
     }
@@ -266,7 +266,7 @@ impl ViewData for GetTableViewData {
 #[derive(Debug)]
 pub struct SetTableViewData(pub AssignmentInfo);
 impl ViewData for SetTableViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         self.0.dump(context);
     }
 }
@@ -277,7 +277,7 @@ pub struct CallViewData {
     pub args: Vec<ViewRef>
 }
 impl ViewData for CallViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         match self.func {
             CallFunc::Func(view) => context.write_view(view, DumpType::Expression),
             CallFunc::SelfCall(view) => context.write_view(view, DumpType::Expression),
@@ -299,7 +299,7 @@ pub struct SelfViewData {
     pub method: Kst
 }
 impl ViewData for SelfViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         self.object.dump(context);
         context.write_str(":");
         context.write_name(self.method);
@@ -309,7 +309,7 @@ impl ViewData for SelfViewData {
 #[derive(Debug)]
 pub struct NewTableViewData;
 impl ViewData for NewTableViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("{}");
     }
 }
@@ -317,7 +317,7 @@ impl ViewData for NewTableViewData {
 #[derive(Debug)]
 pub struct TableViewData(pub TableInfo);
 impl ViewData for TableViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         self.0.dump(context);
     }
 }
@@ -325,7 +325,7 @@ impl ViewData for TableViewData {
 #[derive(Debug)]
 pub struct PrototypeViewData(pub u32, pub Vec<ClosureCapture>); // ProtoIdx
 impl ViewData for PrototypeViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_proto(self.0, &self.1);
     }
 }
@@ -333,7 +333,7 @@ impl ViewData for PrototypeViewData {
 #[derive(Debug)]
 pub struct ConcatViewData(pub Vec<ViewRef>);
 impl ViewData for ConcatViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         for (i, view) in self.0.iter().rev().enumerate() {
             if i != 0 {
                 context.write_str("..");
@@ -346,7 +346,7 @@ impl ViewData for ConcatViewData {
 #[derive(Debug)]
 pub struct VarArgsViewData;
 impl ViewData for VarArgsViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("...");
     }
 }
@@ -357,7 +357,7 @@ pub struct ImplicitNilViewData {
     pub end: Reg
 }
 impl ViewData for ImplicitNilViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("local ");
         let mut reg = self.start;
         loop {
@@ -376,7 +376,7 @@ pub struct ScopeViewData {
     pub statements: Vec<ViewRef>,
 }
 impl ViewData for ScopeViewData {
-    fn dump(&self, context: &mut DumpContext, typ: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, typ: DumpType) {
         let indent = if let DumpType::Statement { last } = typ { last } else { false };
         if !self.statements.is_empty() {
             if indent { context.indent() }
@@ -399,7 +399,7 @@ impl ViewData for ScopeViewData {
 }
 
 struct CondDumper<'a> {
-    context: &'a mut DumpContext,
+    context: &'a mut dyn DumpContext,
     cond_context: &'a CondContext,
     cond_views: &'a [ViewRef],
     root: bool,
@@ -409,7 +409,7 @@ struct CondDumper<'a> {
 }
 
 impl<'a> CondDumper<'a> {
-    fn new(context: &'a mut DumpContext, cond_context: &'a CondContext, cond_views: &'a [ViewRef]) -> CondDumper<'a> {
+    fn new(context: &'a mut dyn DumpContext, cond_context: &'a CondContext, cond_views: &'a [ViewRef]) -> CondDumper<'a> {
         CondDumper {
             context,
             cond_context,
@@ -521,7 +521,7 @@ pub struct CondExprViewData {
     pub invert_last: bool,
 }
 impl ViewData for CondExprViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         {
             let mut cond_dumper = CondDumper::new(context, &self.cond_context, &self.cond_views);
             cond_dumper.inverted = self.invert_last;
@@ -542,7 +542,7 @@ pub struct IfStatViewData {
     pub cond_views: Vec<ViewRef>,
 }
 impl ViewData for IfStatViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("if ");
         {
             let mut cond_dumper = CondDumper::new(context, &self.cond_context, &self.cond_views);
@@ -559,7 +559,7 @@ impl ViewData for IfStatViewData {
 #[derive(Debug)]
 pub struct ElseViewData;
 impl ViewData for ElseViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("pending else");
     }
 }
@@ -572,7 +572,7 @@ pub struct IfElseStatViewData {
     pub cond_views: Vec<ViewRef>,
 }
 impl ViewData for IfElseStatViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("if ");
         {
             let mut cond_dumper = CondDumper::new(context, &self.cond_context, &self.cond_views);
@@ -596,7 +596,7 @@ pub struct WhileStatViewData {
     pub cond_views: Vec<ViewRef>,
 }
 impl ViewData for WhileStatViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("while ");
         {
             let mut cond_dumper = CondDumper::new(context, &self.cond_context, &self.cond_views);
@@ -615,7 +615,7 @@ pub struct WhileTrueStatViewData {
     pub main_body: ViewRef,
 }
 impl ViewData for WhileTrueStatViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("while true do");
         context.write_newline();
         context.write_view(self.main_body, DumpType::Statement { last: true });
@@ -630,7 +630,7 @@ pub enum ReturnViewData {
     Views(Vec<ViewRef>)
 }
 impl ViewData for ReturnViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("return");
 
         match self {
@@ -655,7 +655,7 @@ impl ViewData for ReturnViewData {
 #[derive(Debug)]
 pub struct BreakViewData;
 impl ViewData for BreakViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("break");
     }
 }
@@ -668,7 +668,7 @@ pub struct ForPrepViewData {
     pub step: ViewRef,
 }
 impl ViewData for ForPrepViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("for ");
         context.write_reg(Reg(self.base.0 + 3));
         context.write_str(" = ");
@@ -687,7 +687,7 @@ pub struct ForViewData {
     pub body: ViewRef,
 }
 impl ViewData for ForViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_view(self.prep, DumpType::Expression);
         context.write_newline();
         context.write_view(self.body, DumpType::Statement { last: true });
@@ -702,7 +702,7 @@ pub struct TForPrepViewData {
     pub count: u16
 }
 impl ViewData for TForPrepViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("for ");
         let mut reg = Reg(self.base.0 + 3);
         let mut counter = self.count;
@@ -730,7 +730,7 @@ pub struct DoStatViewData {
     pub main_body: ViewRef,
 }
 impl ViewData for DoStatViewData {
-    fn dump(&self, context: &mut DumpContext, typ: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, typ: DumpType) {
         if let DumpType::Statement { last: true } = typ {
             context.write_view(self.main_body, DumpType::Statement { last: false });
         } else {
@@ -747,7 +747,7 @@ pub struct CloseViewData {
     pub base: Reg,
 }
 impl ViewData for CloseViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("-- explicit close to ");
         context.write_reg(self.base);
     }
@@ -756,7 +756,7 @@ impl ViewData for CloseViewData {
 #[derive(Debug)]
 pub struct BackwardsJumpBarrierViewData;
 impl ViewData for BackwardsJumpBarrierViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("-- backwards jump barrier");
     }
 }
@@ -764,7 +764,7 @@ impl ViewData for BackwardsJumpBarrierViewData {
 #[derive(Debug)]
 pub struct RepeatUntilMarkerViewData;
 impl ViewData for RepeatUntilMarkerViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("-- repeat until marker");
     }
 }
@@ -775,7 +775,7 @@ pub struct RepeatUntilViewData {
     pub body: Vec<ViewRef>,
 }
 impl ViewData for RepeatUntilViewData {
-    fn dump(&self, context: &mut DumpContext, _: DumpType) {
+    fn dump(&self, context: &mut dyn DumpContext, _: DumpType) {
         context.write_str("repeat");
         context.write_newline();
         if !self.body.is_empty() {

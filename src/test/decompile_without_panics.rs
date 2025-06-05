@@ -8,7 +8,7 @@ macro_rules! decompile_test {
             let script = fs::read_to_string($file).unwrap();
             let compiled = ::compile_lua(&script).unwrap();
             let bytecode = ::lua_bytecode(&compiled);
-            if let nom::IResult::Done(_, ::LuaBytecode { main_chunk: ref chunk, .. }) = bytecode {
+            if let Ok((_, ::LuaBytecode { main_chunk: ref chunk, .. })) = bytecode {
                 ::decompile_chunk(&chunk, &vec![]);
             }
         }

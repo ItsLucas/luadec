@@ -2,7 +2,9 @@
 // Attempts to derive meaning from register allocation information
 // Takes a list of instructions and returns a list of information for each instruction
 
-use crate::instruction_definitions::{LuaInstruction, InstructionInfo, UsageType, Count, RegOrTop, Reg, RK};
+use log::trace;
+
+use crate::instruction_definitions::{LuaInstruction, InstructionInfo, RegOrTop, Reg};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum InstructionClass {
@@ -244,7 +246,7 @@ impl<'a> RAllocCtx<'a> {
                         outgoing = Some(Reg(0));
                     }
 
-                    println!("{} {:?} {:?}", i, incoming, outgoing);
+                    trace!("{} {:?} {:?}", i, incoming, outgoing);
 
                     Data::FreeForm(FreeFormData {
                         incoming: incoming.map(FreeFormReg::Initial).unwrap_or(FreeFormReg::None),

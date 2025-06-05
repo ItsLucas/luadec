@@ -1,6 +1,18 @@
-use nom;
-
-use nom::{be_u8, be_i8};
+use nom::{
+    IResult,
+    Err as NomErr,
+    error::{Error as NomError, ErrorKind},
+    bytes::complete::{tag, take},
+    combinator::map,
+    multi::length_count,
+    number::complete::{
+        be_u8, be_i8,
+        u16, u32, u64 as nom_u64,
+        i16, i32, i64 as nom_i64,
+        f32 as nom_f32, f64 as nom_f64,
+    },
+    number::Endianness,
+};
 
 #[derive(Clone,Debug,PartialEq,Eq)]
 pub struct LuaHeader {
@@ -14,11 +26,11 @@ pub struct LuaHeader {
 }
 
 impl LuaHeader {
-    fn endian(&self) -> nom::Endianness {
+    fn endian(&self) -> Endianness {
         if self.big_endian {
-            nom::Endianness::Big
+            Endianness::Big
         } else {
-            nom::Endianness::Little
+            Endianness::Little
         }
     }
 }
@@ -73,151 +85,186 @@ pub struct LuaBytecode {
     pub main_chunk: LuaChunk
 }
 
-named!(pub lua_header<LuaHeader>,
-    do_parse!(
-        tag!(b"\x1BLua") >>
-        tag!(b"\x51") >>
-        format_version: be_u8 >>
-        big_endian: be_u8 >>
-        integer_size: be_u8 >>
-        size_t_size: be_u8 >>
-        instruction_size: be_u8 >>
-        number_size: be_u8 >>
-        number_integral: be_u8 >>
-        (LuaHeader {
-            format_version: format_version,
-            big_endian: big_endian != 1,
-            integer_size: integer_size,
-            size_t_size: size_t_size,
-            instruction_size: instruction_size,
-            number_size: number_size,
-            number_integral: number_integral != 0
+pub fn lua_header(input: &[u8]) -> IResult<&[u8], LuaHeader> {
+    let (input, _) = tag(b"\x1BLua")(input)?;
+    let (input, _) = tag(b"\x51")(input)?;
+    let (input, format_version) = be_u8(input)?;
+    let (input, big_endian_val) = be_u8(input)?;
+    let (input, integer_size) = be_u8(input)?;
+    let (input, size_t_size) = be_u8(input)?;
+    let (input, instruction_size) = be_u8(input)?;
+    let (input, number_size) = be_u8(input)?;
+    let (input, number_integral_val) = be_u8(input)?;
+
+    Ok((input, LuaHeader {
+        format_version,
+        big_endian: big_endian_val != 1,
+        integer_size,
+        size_t_size,
+        instruction_size,
+        number_size,
+        number_integral: number_integral_val != 0,
+    }))
+}
+
+// --- Direct parsing functions ---
+
+// These functions take `header: &LuaHeader` and their lifetime 'b is tied to the input slice.
+// The returned owned types (Vec<u8>, LuaNumber, etc.) do not borrow from `header`.
+
+fn parse_lua_integer_direct<'b>(input: &'b [u8], header: &LuaHeader) -> IResult<&'b [u8], u64> {
+    let endianness = header.endian();
+    match header.integer_size {
+        1 => map(be_u8, |v| v as u64)(input),
+        2 => map(u16(endianness), |v| v as u64)(input),
+        4 => map(u32(endianness), |v| v as u64)(input),
+        8 => nom_u64(endianness)(input),
+        _ => Err(NomErr::Failure(NomError::new(input, ErrorKind::Switch))),
+    }
+}
+
+fn parse_lua_size_t_direct<'b>(input: &'b [u8], header: &LuaHeader) -> IResult<&'b [u8], u64> {
+    let endianness = header.endian();
+    match header.size_t_size {
+        1 => map(be_u8, |v| v as u64)(input),
+        2 => map(u16(endianness), |v| v as u64)(input),
+        4 => map(u32(endianness), |v| v as u64)(input),
+        8 => nom_u64(endianness)(input),
+        _ => Err(NomErr::Failure(NomError::new(input, ErrorKind::Switch))),
+    }
+}
+
+fn parse_lua_instruction_direct<'b>(input: &'b [u8], header: &LuaHeader) -> IResult<&'b [u8], u32> {
+    let endianness = header.endian();
+    match header.instruction_size {
+        4 => u32(endianness)(input),
+        _ => Err(NomErr::Failure(NomError::new(input, ErrorKind::Switch))),
+    }
+}
+
+fn parse_lua_number_direct<'b>(input: &'b [u8], header: &LuaHeader) -> IResult<&'b [u8], LuaNumber> {
+    let endianness = header.endian();
+    if header.number_integral {
+        match header.number_size {
+            1 => map(be_i8, |v| LuaNumber::Integral(v as i64))(input),
+            2 => map(i16(endianness), |v| LuaNumber::Integral(v as i64))(input),
+            4 => map(i32(endianness), |v| LuaNumber::Integral(v as i64))(input),
+            8 => map(nom_i64(endianness), LuaNumber::Integral)(input),
+            _ => Err(NomErr::Failure(NomError::new(input, ErrorKind::Switch))),
+        }
+    } else {
+        match header.number_size {
+            4 => map(nom_f32(endianness), |v| LuaNumber::Floating(v as f64))(input),
+            8 => map(nom_f64(endianness), LuaNumber::Floating)(input),
+            _ => Err(NomErr::Failure(NomError::new(input, ErrorKind::Switch))),
+        }
+    }
+}
+
+fn parse_lua_string_owned_direct<'b>(input: &'b [u8], header: &LuaHeader) -> IResult<&'b [u8], Vec<u8>> {
+    let (input_after_len, len) = parse_lua_size_t_direct(input, header)?;
+    if len == 0 {
+        return Ok((input_after_len, Vec::new()));
+    }
+    let (input_after_data, s_slice) = take(len as usize)(input_after_len)?;
+    if s_slice.is_empty() {
+         Ok((input_after_data, Vec::new()))
+    } else {
+        Ok((input_after_data, s_slice[..s_slice.len() - 1].to_vec()))
+    }
+}
+
+fn parse_lua_local_direct<'b>(input: &'b [u8], header: &LuaHeader) -> IResult<&'b [u8], LuaLocal> {
+    let (input, name) = parse_lua_string_owned_direct(input, header)?;
+    let (input, start_pc) = parse_lua_integer_direct(input, header)?;
+    let (input, end_pc) = parse_lua_integer_direct(input, header)?;
+    Ok((input, LuaLocal { name, start_pc, end_pc }))
+}
+
+// lua_chunk_parser rewritten
+// 'chunk_input_lifetime is the lifetime of the slice being parsed by this specific call to lua_chunk_parser.
+// header is a reference that must live at least as long as 'chunk_input_lifetime.
+// The returned LuaChunk is fully owned and does not borrow from header.
+pub fn lua_chunk_parser<'chunk_input_lifetime>(
+    input: &'chunk_input_lifetime [u8],
+    header: &LuaHeader, // header's lifetime is managed by the caller (lua_bytecode)
+) -> IResult<&'chunk_input_lifetime [u8], LuaChunk> {
+
+    // Helper closure for length_count's count_parser argument
+    // It captures `header` by reference.
+    // The lifetime 'a here will be 'chunk_input_lifetime.
+    let count_parser = |i: &'chunk_input_lifetime [u8]| parse_lua_integer_direct(i, header);
+
+    let (input, name) = parse_lua_string_owned_direct(input, header)?;
+    let (input, line_defined) = parse_lua_integer_direct(input, header)?;
+    let (input, last_line_defined) = parse_lua_integer_direct(input, header)?;
+    let (input, num_upvalues) = be_u8(input)?;
+    let (input, num_params) = be_u8(input)?;
+    let (input, is_vararg_byte) = be_u8(input)?;
+    let (input, max_stack) = be_u8(input)?;
+
+    let (input, instructions) = length_count(
+        count_parser, // Use the count_parser closure
+        |i| parse_lua_instruction_direct(i, header),
+    )(input)?;
+    
+    let (input, constants) = length_count(
+        count_parser,
+        |i_const: &'chunk_input_lifetime [u8]| {
+            let (i_const, const_type) = be_u8(i_const)?;
+            match const_type {
+                0 => Ok((i_const, LuaConstant::Null)),
+                1 => map(be_u8, |v| LuaConstant::Bool(v != 0))(i_const),
+                // Pass header to the direct parser
+                3 => map(|ii| parse_lua_number_direct(ii, header), LuaConstant::Number)(i_const),
+                4 => map(|ii| parse_lua_string_owned_direct(ii, header), LuaConstant::String)(i_const),
+                _ => Err(NomErr::Failure(NomError::new(i_const, ErrorKind::Switch))),
+            }
+        },
+    )(input)?;
+
+    let (input, prototypes) = length_count(
+        count_parser,
+        |i_proto| lua_chunk_parser(i_proto, header), // Recursive call, header is passed along
+    )(input)?;
+
+    let (input, source_lines) = length_count(
+        count_parser,
+        |i_line| parse_lua_integer_direct(i_line, header),
+    )(input)?;
+
+    let (input, locals) = length_count(
+        count_parser,
+        |i_local| parse_lua_local_direct(i_local, header),
+    )(input)?;
+    
+    let (input, upvalue_names) = length_count(
+        count_parser,
+        |i_upval| parse_lua_string_owned_direct(i_upval, header),
+    )(input)?;
+
+    let is_vararg = if (is_vararg_byte & 2) != 0 {
+        Some(LuaVarArgInfo {
+            has_arg: (is_vararg_byte & 1) != 0,
+            needs_arg: (is_vararg_byte & 4) != 0,
         })
-    )
-);
+    } else {
+        None
+    };
 
-named_args!(lua_integer<'a>(header: &'a LuaHeader) <u64>,
-    switch!(
-        value!(header.integer_size),
-        1 => map!(be_u8, |v| v as u64) |
-        2 => map!(u16!(header.endian()), |v| v as u64) |
-        4 => map!(u32!(header.endian()), |v| v as u64) |
-        8 => map!(u64!(header.endian()), |v| v as u64)
-    )
-);
+    Ok((input, LuaChunk {
+        name, line_defined, last_line_defined, num_upvalues, num_params,
+        is_vararg, max_stack, instructions, constants, prototypes,
+        source_lines, locals, upvalue_names,
+    }))
+}
 
-named_args!(lua_size_t<'a>(header: &'a LuaHeader) <u64>,
-    switch!(
-        value!(header.size_t_size),
-        1 => map!(be_u8, |v| v as u64) |
-        2 => map!(u16!(header.endian()), |v| v as u64) |
-        4 => map!(u32!(header.endian()), |v| v as u64) |
-        8 => map!(u64!(header.endian()), |v| v as u64)
-    )
-);
+pub fn lua_bytecode(input: &[u8]) -> IResult<&[u8], LuaBytecode> {
+    let (input, owned_header) = lua_header(input)?;
+    let (input, main_chunk) = lua_chunk_parser(input, &owned_header)?;
 
-named_args!(lua_instruction<'a>(header: &'a LuaHeader) <u32>,
-    switch!(
-        value!(header.instruction_size),
-        4 => u32!(header.endian())
-    )
-);
-
-macro_rules! f32 ( ($i:expr, $e:expr) => ( {if nom::Endianness::Big == $e { nom::be_f32($i) } else { nom::le_f32($i) } } ););
-macro_rules! f64 ( ($i:expr, $e:expr) => ( {if nom::Endianness::Big == $e { nom::be_f64($i) } else { nom::le_f64($i) } } ););
-
-named_args!(lua_number<'a>(header: &'a LuaHeader) <LuaNumber>,
-    switch!(
-        value!(header.number_integral),
-        true => map!(
-            switch!(
-                value!(header.number_size),
-                1 => map!(be_i8, |v| v as i64) |
-                2 => map!(i16!(header.endian()), |v| v as i64) |
-                4 => map!(i32!(header.endian()), |v| v as i64) |
-                8 => map!(i64!(header.endian()), |v| v as i64)
-            ),
-            |v| LuaNumber::Integral(v)
-        ) |
-        false => map!(
-            switch!(
-                value!(header.number_size),
-                4 => map!(f32!(header.endian()), |v| v as f64) |
-                8 => map!(f64!(header.endian()), |v| v as f64)
-            ),
-            |v| LuaNumber::Floating(v)
-        )
-    )
-);
-
-macro_rules! lua_string ( ($i:expr, $header:expr) => ( { map!($i, length_bytes!(apply!(lua_size_t, $header)), |v| if v.is_empty() { v } else { &v[..v.len()-1] }) } ););
-
-named_args!(lua_local<'a>(header: &'a LuaHeader) <LuaLocal>,
-    do_parse!(
-        name: lua_string!(header) >>
-        start_pc: apply!(lua_integer, header) >>
-        end_pc: apply!(lua_integer, header) >>
-        (LuaLocal {
-            name: name.to_vec(),
-            start_pc: start_pc,
-            end_pc: end_pc,
-        })
-    )
-);
-
-named_args!(pub lua_chunk<'a>(header: &'a LuaHeader) <LuaChunk>,
-    do_parse!(
-        name: lua_string!(header) >>
-        line_defined: apply!(lua_integer, header) >>
-        last_line_defined: apply!(lua_integer, header) >>
-        num_upvalues: be_u8 >>
-        num_params: be_u8 >>
-        is_vararg: be_u8 >>
-        max_stack: be_u8 >>
-        instructions: length_count!(apply!(lua_integer, header), apply!(lua_instruction, header)) >>
-        constants: length_count!(apply!(lua_integer, header), switch!(
-            be_u8,
-            0 => value!(LuaConstant::Null) |
-            1 => map!(be_u8, |v| LuaConstant::Bool(v != 0)) |
-            3 => map!(apply!(lua_number, header), |v| LuaConstant::Number(v)) |
-            4 => map!(lua_string!(header), |v| LuaConstant::String(v.to_vec()))
-        )) >>
-        prototypes: length_count!(apply!(lua_integer, header), apply!(lua_chunk, header)) >>
-        source_lines: length_count!(apply!(lua_integer, header), apply!(lua_integer, header)) >>
-        locals: length_count!(apply!(lua_integer, header), apply!(lua_local, header)) >>
-        upvalue_names: length_count!(apply!(lua_integer, header), map!(lua_string!(header), |v| v.to_vec())) >>
-        (LuaChunk {
-            name: name.to_vec(),
-            line_defined: line_defined,
-            last_line_defined: last_line_defined,
-            num_upvalues: num_upvalues,
-            num_params: num_params,
-            is_vararg: if (is_vararg & 2) != 0 {
-                Some(LuaVarArgInfo {
-                    has_arg: (is_vararg & 1) != 0,
-                    needs_arg: (is_vararg & 4) != 0,
-                })
-            } else {
-                None
-            },
-            max_stack: max_stack,
-            instructions: instructions,
-            constants: constants,
-            prototypes: prototypes,
-            source_lines: source_lines,
-            locals: locals,
-            upvalue_names: upvalue_names,
-        })
-    )
-);
-
-named!(pub lua_bytecode<LuaBytecode>,
-    do_parse!(
-        header: lua_header >>
-        main_chunk: apply!(lua_chunk, &header) >>
-        (LuaBytecode {
-            header: header,
-            main_chunk: main_chunk,
-        })
-    )
-);
+    Ok((input, LuaBytecode {
+        header: owned_header,
+        main_chunk,
+    }))
+}

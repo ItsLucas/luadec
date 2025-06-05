@@ -1,7 +1,10 @@
-use enum_primitive::FromPrimitive;
 
-use instruction_definitions::*;
-use bytecode_reader::LuaChunk;
+#[macro_use]
+use enum_primitive::*;
+use log::trace;
+
+use crate::instruction_definitions::*;
+use crate::bytecode_reader::LuaChunk;
 
 fn decode_op(instr: u32) -> u8 { (instr & 0x3F) as u8 }
 

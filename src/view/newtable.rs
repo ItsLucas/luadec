@@ -1,5 +1,5 @@
-use view::{ViewOrRegOrKst, ViewRef};
-use dump::*;
+use crate::view::{ViewOrRegOrKst, ViewRef};
+use crate::dump::*;
 
 #[derive(Debug, Clone)]
 pub struct TableInfo {
@@ -18,7 +18,7 @@ pub enum TableEntry {
 }
 
 impl TableInfo {
-    pub fn dump(&self, context: &mut DumpContext) {
+    pub fn dump(&self, context: &mut dyn DumpContext) {
         context.write_str("{");
         context.write_newline();
         context.indent();

@@ -1,15 +1,17 @@
 use std::ops::Range;
 
-use cond_logic::{CondContext, CondTarget};
-use instruction_definitions::{Reg, RK, Count};
-use free_mark::FreeMark;
-use reduce::Reduce;
-use view::{RegRange, View, ViewData, ViewOrReg, ViewOrRegOrKst, ViewType, CallFunc, ViewRef, ViewKeyRef};
-use view::assignment_info::*;
-use view::newtable::{TableInfo, TableEntry};
-use view::view_type::{ExpressionInfo, PartialCondInfo};
+use log::trace;
 
-use ::ViewContext;
+use crate::cond_logic::{CondContext, CondTarget};
+use crate::instruction_definitions::{Reg, RK, Count};
+use crate::free_mark::FreeMark;
+use crate::reduce::Reduce;
+use crate::view::{RegRange, View, ViewData, ViewOrReg, ViewOrRegOrKst, ViewType, CallFunc, ViewRef, ViewKeyRef};
+use crate::view::assignment_info::*;
+use crate::view::newtable::{TableInfo, TableEntry};
+use crate::view::view_type::{ExpressionInfo, PartialCondInfo};
+
+use crate::ViewContext;
 
 // TODO: Make drop panic if not canceled or built
 
@@ -601,10 +603,11 @@ impl<'lb> ViewBuilder<'lb> {
         }
 
         // Try to figure out a required base for dest inline
-        let required_base = partial.iter()
-            .filter_map(|lhs| lhs.pull_base_reg())
-            .reduce(|a, b| if a.is_above(b) { a } else { b });
-
+        let required_base = Reduce::reduce(
+            partial.iter()
+                .filter_map(|lhs| lhs.pull_base_reg()),
+            |a, b| if a.is_above(b) { a } else { b }
+        );
         trace!("Required base: {:?} | {:?}", required_base, self.free_mark);
 
         if let Some(required_base) = required_base {
@@ -816,7 +819,7 @@ impl<'lb> ViewBuilder<'lb> {
         }
     }
 
-    pub fn build(self, data: Box<ViewData>, view_type: ViewType, key: ViewKeyRef) -> View {
+    pub fn build(self, data: Box<dyn ViewData>, view_type: ViewType, key: ViewKeyRef) -> View {
         View {
             index: self.index,
             data: data,

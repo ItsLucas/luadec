@@ -1,5 +1,5 @@
-use instruction_definitions::{Reg, Kst, Upvalue, ClosureCapture};
-use view::ViewRef;
+use crate::instruction_definitions::{Reg, Kst, Upvalue, ClosureCapture};
+use crate::view::ViewRef;
 
 #[derive(Debug)]
 pub enum DumpType {
