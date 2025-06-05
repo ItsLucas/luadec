@@ -5,6 +5,7 @@
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 A Lua 5.1 bytecode decompiler library written in Rust, originated from the `lbcdec` project.
+[lbcdec](https://github.com/lbcdec/lbcdec)
 
 ## Installation
 
@@ -172,7 +173,7 @@ cargo doc --open
 
 ## Related Projects
 
-- **lbcdec**: The original project this library is based on
+- [**lbcdec**](https://github.com/lbcdec/lbcdec): The original project this library is based on
 
 ## License
 
