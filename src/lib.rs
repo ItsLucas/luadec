@@ -1,4 +1,4 @@
-//! # lbcdec - Lua Bytecode Decompiler
+//! # luadec - Lua Bytecode Decompiler
 //! 
 //! A library for decompiling Lua 5.1 bytecode back to readable Lua source code.
 //! 
@@ -6,7 +6,7 @@
 //! 
 //! ### Basic usage
 //! ```rust,no_run
-//! use lbcdec::{LuaDecompiler, DecompileOptions};
+//! use luadec::{LuaDecompiler, DecompileOptions};
 //! 
 //! let bytecode = std::fs::read("script.luac").unwrap();
 //! let decompiler = LuaDecompiler::new();
@@ -16,7 +16,7 @@
 //! 
 //! ### Compiling and decompiling
 //! ```rust,ignore
-//! use lbcdec::{LuaDecompiler, compile_lua_script};
+//! use luadec::{LuaDecompiler, compile_lua_script};
 //! 
 //! let source = "print('Hello, World!')";
 //! let bytecode = compile_lua_script(source).unwrap();
